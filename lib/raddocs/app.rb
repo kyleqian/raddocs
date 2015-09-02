@@ -5,14 +5,16 @@ module Raddocs
     set :root, File.join(File.dirname(__FILE__), "..")
 
     # Main index, displays all examples grouped by resource
-    get "/" do
+    get %r{^/([^\/\\]+)/?$} do |api|
+      @active_api = api.to_sym
       index = Index.new(File.join(docs_dir, "index.json"))
       haml :index, :locals => { :index => index }
     end
 
     # Allows for overriding styles
-    get "/custom-css/*" do
-      file = "#{docs_dir}/styles/#{params[:splat][0]}"
+    get "/*/custom-css/*" do
+      @active_api = params[:splat][0].to_sym
+      file = "#{docs_dir}/styles/#{params[:splat][1]}"
 
       if !File.exists?(file)
         raise Sinatra::NotFound
@@ -27,9 +29,10 @@ module Raddocs
     #
     # @example
     #   "/orders/create_an_order" => "docs/api/orders/create_an_order.json"
-    get "/*" do
-      file = "#{docs_dir}/#{params[:splat][0]}.json"
-
+    get "/*/*" do
+      @active_api = params[:splat][0].to_sym
+      file = "#{docs_dir}/#{params[:splat][1]}.json"
+      puts file
       if !File.exists?(file)
         raise Sinatra::NotFound
       end
@@ -46,7 +49,11 @@ module Raddocs
     end
 
     helpers do
-      def link_to(name, link)
+      def active_api
+        @active_api ||= nil
+      end
+
+      def link_to name, link
         %{<a href="#{url_location}#{link}">#{name}</a>}
       end
 
@@ -55,13 +62,13 @@ module Raddocs
       end
 
       def url_prefix
-        url = Raddocs.configuration.url_prefix
+        url = Raddocs.configuration(active_api).url_prefix
         return '' if url.to_s.empty?
         url.start_with?('/') ? url : "/#{url}"
       end
 
       def api_name
-        Raddocs.configuration.api_name
+        Raddocs.configuration(active_api).api_name
       end
 
       # Loads all necessary css files
@@ -70,7 +77,7 @@ module Raddocs
       def css_files
         files = ["#{url_location}/codemirror.css", "#{url_location}/application.css"]
 
-        if Raddocs.configuration.include_bootstrap
+        if Raddocs.configuration(active_api).include_bootstrap
           files << "#{url_location}/bootstrap.min.css"
         end
 
@@ -79,13 +86,13 @@ module Raddocs
           files << "#{url_location}/custom-css/#{basename}"
         end
 
-        files.concat Array(Raddocs.configuration.external_css)
+        files.concat Array(Raddocs.configuration(active_api).external_css)
 
         files
       end
 
       def docs_dir
-        Raddocs.configuration.docs_dir
+        Raddocs.configuration(active_api).docs_dir
       end
     end
   end
